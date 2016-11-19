@@ -66,9 +66,17 @@ struct vmu_fs {
 };
 
 
+// Convert 2 bytes into a 16 bit little endian integer
+uint16_t to_16bit_le(const uint8_t *img);
+
 // Read basic filesystem structures from vmu image
 int read_fs(uint8_t *img, const unsigned length, struct vmu_fs*);
 
+// Write a file into the vmu filesystem
+int write_file(struct vmu_fs *vmu_fs, 
+    const char *file_name, 
+    const uint8_t *file_contents, 
+    const unsigned file_length);
 
 
 #ifdef __cplusplus

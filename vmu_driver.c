@@ -3,6 +3,7 @@
 #define FUSE_USE_VERSION 30
 
 #include <fuse.h>
+#include <fuse/fuse_lowlevel.h>
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -28,7 +29,7 @@ int stat_vmu_fs(const struct vmu_fs *vmu_fs, const char *path, struct stat *stbu
    return -ENOENT;
 }   
 
-static uint16_t to_16bit_le(const uint8_t *img) {
+uint16_t to_16bit_le(const uint8_t *img) {
     return img[0] | (img[1] << 8);
 }
 
@@ -130,7 +131,7 @@ int write_file(struct vmu_fs *vmu_fs,
     const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location;
     uint8_t *img = vmu_fs->img;
         
-    if (strlen(file_name) > MAX_FILENAME_SIZE) {
+    if (strnlen(file_name, MAX_FILENAME_SIZE + 1) > MAX_FILENAME_SIZE) {
         return -EIO;
     } 
 
@@ -139,14 +140,14 @@ int write_file(struct vmu_fs *vmu_fs,
 
      /* Check if file already exists so we may be able to re-use 
       * the directory entry and allocated blocks */  
-    for (int i = 0; i < TOTAL_DIRECTORY_ENTRIES; i++) { 
+    for (int i = TOTAL_DIRECTORY_ENTRIES - 1; i >= 0; i--) { 
         if (vmu_fs->vmu_file[i].is_free) { 
-            if (first_free_dir_entry != -1) {
+            if (first_free_dir_entry == -1) {
                 first_free_dir_entry = i;
             }
             continue;
         }
-          
+         
         if (strncmp(file_name, vmu_fs->vmu_file[i].filename, MAX_FILENAME_SIZE) == 0) {
             matched_dir_entry = i;
             break;                
@@ -208,10 +209,10 @@ int write_file(struct vmu_fs *vmu_fs,
 
         // Overwritten file is smaller than the original
         // Need to mark the "extra" blocks as free memory
-        while (blocks_written < vmu_fs->vmu_file[matched_dir_entry].size_in_blocks) {
+        while (blocks_written < vmu_fs->vmu_file[matched_dir_entry].size_in_blocks + 1) {
             cur_block = to_16bit_le(img + fat_addr);
             int next =  fat_block_addr + (cur_block * 2); 
-            write_16bit_le(img + fat_addr, 0xFFFA);
+            write_16bit_le(img + fat_addr, 0xFFFC);
             fat_addr = next;
             blocks_written++;        
         }
@@ -224,7 +225,7 @@ int write_file(struct vmu_fs *vmu_fs,
         block_no--) {
         
         // Block is already allocated, try the next
-        if (to_16bit_le(img + fat_block_addr + (block_no * 2)) != 0xFFFA) {
+        if (to_16bit_le(img + fat_block_addr + (block_no * 2)) != 0xFFFC) {
             continue;
         }     
 
@@ -234,12 +235,14 @@ int write_file(struct vmu_fs *vmu_fs,
             bytes_to_copy);
 
         if (first_free_dir_entry != -1 && !starting_block_set) { 
-            vmu_fs->vmu_file[first_free_dir_entry].starting_block = block_no; 
+            vmu_fs->vmu_file[first_free_dir_entry].starting_block = block_no;
+            starting_block_set = 1; 
         }
         if (last_block != -1) {
             write_16bit_le(img + fat_block_addr + (last_block * 2), block_no);
         }
         last_block = block_no;
+        
         // In the FAT write that the block is the end block 
         // (although it might not be the end, if so will be overwritten in
         //  the next iteration)
@@ -252,5 +255,46 @@ int write_file(struct vmu_fs *vmu_fs,
         return -EIO;
     }
     
+    return 0;
+}
+
+int remove_file(struct vmu_fs *vmu_fs, const char *file_name) 
+{
+    // File doesn't exist as filename is too large
+    if (strnlen(file_name, MAX_FILENAME_SIZE + 1) > MAX_FILENAME_SIZE) {
+        return -EIO;
+    } 
+
+    int matched_dir_entry = -1;
+
+     /* Locate the FAT directory entry for the file*/  
+    for (int i = TOTAL_DIRECTORY_ENTRIES - 1; i >= 0; i--) { 
+        if (!vmu_fs->vmu_file[i].is_free && 
+            strncmp(file_name, vmu_fs->vmu_file[i].filename, MAX_FILENAME_SIZE) == 0) {
+                 matched_dir_entry = i;
+                 break;
+        }
+    }
+    
+    // File not found 
+    if (matched_dir_entry == -1) {
+        return -EIO;
+    }
+    
+    // Mark directory entry as free as well as all the FAT blocks
+    // allocated to it
+    vmu_fs->vmu_file[matched_dir_entry].is_free = 1;
+
+    uint16_t cur_block;
+    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location;
+    int fat_addr = (vmu_fs->vmu_file[matched_dir_entry].starting_block * 2) + 
+                fat_block_addr;
+    
+    do {
+        cur_block = to_16bit_le(vmu_fs->img + fat_addr);
+        write_16bit_le(vmu_fs->img + fat_block_addr, 0xFFFC);       
+        fat_addr = (cur_block * 2) + fat_block_addr;
+    } while (cur_block != 0xFFFA);
+      
     return 0;
 }
