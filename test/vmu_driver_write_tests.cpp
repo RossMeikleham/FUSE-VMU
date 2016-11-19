@@ -22,9 +22,28 @@ static int get_filecount(struct vmu_fs *vmu_fs) {
     return file_count;
 }
 
+
+static int get_allocated_blocks(struct vmu_fs *vmu_fs) {
+
+    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location;
+    int blocks_unallocated = 0;
+
+    for (int entry = 0; entry < vmu_fs->root_block.user_block_count; entry++) {
+        uint16_t fat_value = to_16bit_le(vmu_fs->img + fat_block_addr + (entry * 2));
+        if (fat_value == 0xFFFC) {
+            blocks_unallocated++;
+        }
+    } 
+    
+    return vmu_fs->root_block.user_block_count - blocks_unallocated;    
+}
+
+
 // Tests that writing a single file works correctly
 TEST_P(VmuWriteFsTest, CorrectlyNormalWrites) {
-   
+    
+    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs.root_block.fat_location;
+
     ASSERT_EQ(3, get_filecount(&vmu_fs));
 
     int res = write_file(&vmu_fs, "SONIC2__S01", write_file_contents, BLOCK_SIZE_BYTES * 18);   
@@ -46,18 +65,9 @@ TEST_P(VmuWriteFsTest, CorrectlyNormalWrites) {
         FAIL() << "File wasn't written to the correct starting block\n";
     }
 
-    int blocks_unallocated = 0;
-    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs.root_block.fat_location;
-    
-    for (int entry = 0; entry < vmu_fs.root_block.user_block_count; entry++) {
-        uint16_t fat_value = to_16bit_le(vmu_fs.img + fat_block_addr + (entry * 2));
-        if (fat_value == 0xFFFC) {
-            blocks_unallocated++;
-        }
-    } 
-
-    ASSERT_EQ(46, vmu_fs.root_block.user_block_count - blocks_unallocated);    
+    ASSERT_EQ(46, get_allocated_blocks(&vmu_fs));
 }
+
 
 // Tests that a full filesystem cannot have files written to it
 TEST_P(VmuWriteFsTest, FailsWhenFull) {
@@ -79,66 +89,69 @@ TEST_P(VmuWriteFsTest, FailsWhenFull) {
     ASSERT_NE(0, write_file(&vmu_fs, buf, write_file_contents, BLOCK_SIZE_BYTES * 18));      
 } 
 
+
 // Tests that overwriting a file with a file of equal size works correctly
 TEST_P(VmuWriteFsTest, CorrectlyOverwritesEqualSize) {
      
     ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
     ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
-   
     ASSERT_EQ(4, get_filecount(&vmu_fs));
-
-    int blocks_unallocated = 0;
-    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs.root_block.fat_location;
-    
-    for (int entry = 0; entry < vmu_fs.root_block.user_block_count; entry++) {
-        uint16_t fat_value = to_16bit_le(vmu_fs.img + fat_block_addr + (entry * 2));
-        if (fat_value == 0xFFFC) {
-            blocks_unallocated++;
-        }
-    } 
-
-    ASSERT_EQ(46, vmu_fs.root_block.user_block_count - blocks_unallocated);    
-
+    ASSERT_EQ(46, get_allocated_blocks(&vmu_fs));
 }
+
 
 // Tests that overwriting a file with a smaller file works correctly
 TEST_P(VmuWriteFsTest, CorrectlyOverwritesSmallerSize) {
     
     ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
-    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 7));
-   
+    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 7));  
     ASSERT_EQ(4, get_filecount(&vmu_fs));
-
-    int blocks_unallocated = 0;
-    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs.root_block.fat_location;
-    
-    for (int entry = 0; entry < vmu_fs.root_block.user_block_count; entry++) {
-        uint16_t fat_value = to_16bit_le(vmu_fs.img + fat_block_addr + (entry * 2));
-        if (fat_value == 0xFFFC) {
-            blocks_unallocated++;
-        }
-    } 
-
-    ASSERT_EQ(35, vmu_fs.root_block.user_block_count - blocks_unallocated);    
+    ASSERT_EQ(35, get_allocated_blocks(&vmu_fs)); 
 }
+
 
 // Tests that overwriting a file with a larger file works correctly
 TEST_P(VmuWriteFsTest, CorrectlyOverwritesLargerSize) {
     
     ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 5));
     ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
-   
     ASSERT_EQ(4, get_filecount(&vmu_fs));
+    ASSERT_EQ(46, get_allocated_blocks(&vmu_fs));
+}
 
-    int blocks_unallocated = 0;
-    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs.root_block.fat_location;
+
+// Tests that removing an existing file works correctly
+TEST_P(VmuWriteFsTest, CorrectlyRemovesIndividualFile) {
+
+    ASSERT_EQ(0, remove_file(&vmu_fs, "SONICADV_INT")); 
+    ASSERT_EQ(2, get_filecount(&vmu_fs));
+    ASSERT_EQ(18, get_allocated_blocks(&vmu_fs)); 
+}
+
+// Tests that removing all files from the filesystem works correctly
+TEST_P(VmuWriteFsTest, CorrectlyRemovesAllFiles) {
     
-    for (int entry = 0; entry < vmu_fs.root_block.user_block_count; entry++) {
-        uint16_t fat_value = to_16bit_le(vmu_fs.img + fat_block_addr + (entry * 2));
-        if (fat_value == 0xFFFC) {
-            blocks_unallocated++;
-        }
-    } 
+    ASSERT_EQ(0, remove_file(&vmu_fs, "EVO_DATA.001")); 
+    ASSERT_EQ(20, get_allocated_blocks(&vmu_fs)); 
+    ASSERT_EQ(0, remove_file(&vmu_fs, "SONICADV_INT")); 
+    ASSERT_EQ(10, get_allocated_blocks(&vmu_fs)); 
+    ASSERT_EQ(0, remove_file(&vmu_fs, "SONICADV_INT")); 
+    ASSERT_EQ(0, get_allocated_blocks(&vmu_fs)); 
+}
 
-    ASSERT_EQ(46, vmu_fs.root_block.user_block_count - blocks_unallocated);    
+
+// Test that removing a non existing file fails
+TEST_P(VmuWriteFsTest, FailsToRemoveNonExistingFile) {
+
+    ASSERT_NE(0, remove_file(&vmu_fs, "DOESNT_EXIST")); 
+}
+
+// Test that writing a file then removing is works correctly
+TEST_P(VmuWriteFsTest, CorrectlyWritesThenRemovesFile) {
+    
+    int before_blocks = get_allocated_blocks(&vmu_fs);
+
+    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18)); 
+    ASSERT_EQ(0, remove_file(&vmu_fs, "FILE")); 
+    ASSERT_EQ(before_blocks, get_allocated_blocks(&vmu_fs)); 
 }

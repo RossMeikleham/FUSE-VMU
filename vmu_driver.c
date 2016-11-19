@@ -163,7 +163,7 @@ int write_file(struct vmu_fs *vmu_fs,
     unsigned leftovers = file_length % BLOCK_SIZE_BYTES;
     unsigned blocks_needed = file_length / BLOCK_SIZE_BYTES + !!leftovers;
     int starting_block_set = 1;
-
+    
     if (leftovers == 0) {
         leftovers = BLOCK_SIZE_BYTES;
     }
@@ -187,10 +187,9 @@ int write_file(struct vmu_fs *vmu_fs,
 
     // Overwrite blocks in an existing file     
     if (matched_dir_entry != -1) {
-        int fat_addr = (vmu_fs->vmu_file[matched_dir_entry].starting_block * 2) + 
-                fat_block_addr;
-        
-        uint16_t cur_block = to_16bit_le(img + fat_addr);
+        uint16_t cur_block = vmu_fs->vmu_file[matched_dir_entry].starting_block;
+        int fat_addr;
+          
         if (blocks_needed != 0) {
             do {    
                 int bytes_to_copy = blocks_needed > blocks_written + 1 
@@ -206,22 +205,27 @@ int write_file(struct vmu_fs *vmu_fs,
                 blocks_written++;            
             } while (cur_block != 0xFFFA && blocks_written < blocks_needed);
         }
+        bool x = false;
 
+        int old_no_of_blocks = vmu_fs->vmu_file[matched_dir_entry].size_in_blocks;
+        vmu_fs->vmu_file[matched_dir_entry].size_in_blocks = blocks_needed;
+        
         // Overwritten file is smaller than the original
         // Need to mark the "extra" blocks as free memory
-        while (blocks_written < vmu_fs->vmu_file[matched_dir_entry].size_in_blocks + 1) {
+        while (blocks_written < old_no_of_blocks) {
+            x = true;
             cur_block = to_16bit_le(img + fat_addr);
             int next =  fat_block_addr + (cur_block * 2); 
             write_16bit_le(img + fat_addr, 0xFFFC);
             fat_addr = next;
             blocks_written++;        
         }
-    }
+    } 
 
     // Write either entire new file, or extra data if file being saved
     // over an existing file is larger than the existing file
     for (int block_no = vmu_fs->root_block.user_block_count - 1; 
-        blocks_written < blocks_needed && block_no >= 0; 
+        (blocks_written < blocks_needed) && (block_no >= 0); 
         block_no--) {
         
         // Block is already allocated, try the next
@@ -285,16 +289,16 @@ int remove_file(struct vmu_fs *vmu_fs, const char *file_name)
     // allocated to it
     vmu_fs->vmu_file[matched_dir_entry].is_free = 1;
 
-    uint16_t cur_block;
     const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location;
-    int fat_addr = (vmu_fs->vmu_file[matched_dir_entry].starting_block * 2) + 
-                fat_block_addr;
+    uint16_t cur_block = vmu_fs->vmu_file[matched_dir_entry].starting_block;
+    int fat_addr = (cur_block * 2) + fat_block_addr;
     
-    do {
+    while (cur_block != 0xFFFA) {
         cur_block = to_16bit_le(vmu_fs->img + fat_addr);
-        write_16bit_le(vmu_fs->img + fat_block_addr, 0xFFFC);       
-        fat_addr = (cur_block * 2) + fat_block_addr;
-    } while (cur_block != 0xFFFA);
+        int next = fat_block_addr + (cur_block * 2); 
+        write_16bit_le(vmu_fs->img + fat_addr, 0xFFFC);
+        fat_addr = next;
+    } 
       
     return 0;
 }

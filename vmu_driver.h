@@ -41,36 +41,40 @@ struct root_block {
     uint8_t alpha;
     struct timestamp timestamp;
     uint16_t fat_location;
-    uint16_t fat_size;
-    uint16_t directory_location;
-    uint16_t directory_size;
+    uint16_t fat_size; // Size of the FAT table in blocks
+    uint16_t directory_location; // Location of the base directory block
+    uint16_t directory_size; // Number of blocks the directory uses
     uint16_t icon_shape;
-    uint16_t user_block_count;
+    uint16_t user_block_count; // How many blocks are available to the user
 };
 
+// Directory information on an individual file
 struct vmu_file {
-    bool is_free;
-    enum filetype filetype;
+    bool is_free; // Whether the directory entry contains a file or not
+    enum filetype filetype; // Whether a file is DATA or a GAME
     bool copy_protected;
     uint16_t starting_block;
     char filename[MAX_FILENAME_SIZE + 1];
     struct timestamp timestamp;
     uint16_t size_in_blocks;
-    uint16_t offset_in_blocks;
+    uint16_t offset_in_blocks; // Offset of the File header
 };
 
+// VMU filesystem
 struct vmu_fs {
     struct root_block root_block;
     struct vmu_file vmu_file[TOTAL_DIRECTORY_ENTRIES];      
-    uint8_t *img;
+    uint8_t *img; // Binary representation of the Filesystem
 };
 
 
 // Convert 2 bytes into a 16 bit little endian integer
 uint16_t to_16bit_le(const uint8_t *img);
 
+
 // Read basic filesystem structures from vmu image
 int read_fs(uint8_t *img, const unsigned length, struct vmu_fs*);
+
 
 // Write a file into the vmu filesystem
 int write_file(struct vmu_fs *vmu_fs, 
@@ -78,6 +82,9 @@ int write_file(struct vmu_fs *vmu_fs,
     const uint8_t *file_contents, 
     const unsigned file_length);
 
+
+// Remove a file from the filesystem
+int remove_file(struct vmu_fs *vmu_fs, const char *file_name);
 
 #ifdef __cplusplus
 }
