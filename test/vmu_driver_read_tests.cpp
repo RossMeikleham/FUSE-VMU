@@ -1,7 +1,7 @@
 #include "vmu_tests.h"
 #include "vmu_driver_read_tests.h"
+#include "../src/vmu_driver.h"
 #include <gtest/gtest.h>
-#include "../vmu_driver.h"
 #include <cstdio>
 #include <cstdint>
 

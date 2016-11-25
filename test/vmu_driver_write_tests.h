@@ -3,7 +3,7 @@
 
 #include <gtest/gtest.h>
 #include "vmu_tests.h"
-#include "../vmu_driver.h"
+#include "../src/vmu_driver.h"
 
 class VmuFsWriteFile { 
  public:

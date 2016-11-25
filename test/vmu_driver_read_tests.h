@@ -1,9 +1,9 @@
 #ifndef VMU_DRIVER_READ_TESTS_H
 #define VMU_DRIVER_READ_TESTS_H
 
-#include <gtest/gtest.h>
 #include "vmu_tests.h"
-#include "../vmu_driver.h"
+#include "../src/vmu_driver.h"
+#include <gtest/gtest.h>
 
 class ValidVmuFs { 
  public:

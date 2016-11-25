@@ -17,5 +17,5 @@ include_directories(/usr/local/include)
 include_directories(${FUSE_INCLUDE_DIR})
 
 add_executable(fuse_vmu_tests vmu_tests.cpp vmu_driver_read_tests.cpp 
-    vmu_driver_write_tests.cpp ../vmu_driver.c)
+    vmu_driver_write_tests.cpp ../src/vmu_driver.c)
 target_link_libraries(fuse_vmu_tests /usr/local/lib/libgtest.a /usr/local/lib/libgtest_main.a pthread)

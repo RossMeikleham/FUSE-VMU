@@ -12,6 +12,5 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 find_package(FUSE REQUIRED)
 
 include_directories(${FUSE_INCLUDE_DIR})
-add_executable(fuse-example fuse-example.c)
-target_link_libraries(fuse-example ${FUSE_LIBRARIES})
-
+add_executable(fuse_vmu src/vmu_driver.c src/vmu_fuse.c)
+target_link_libraries(fuse_vmu ${FUSE_LIBRARIES})

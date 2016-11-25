@@ -1,12 +1,10 @@
-#include <gtest/gtest.h>
-#include "vmu_driver_write_tests.h"
-#include "../vmu_driver.h"
-#include <gtest/gtest.h>
 #include "vmu_tests.h"
 #include "vmu_driver_write_tests.h"
-#include "../vmu_driver.h"
+#include "../src/vmu_driver.h"
+
 #include <cstdio>
 #include <cstdint>
+#include <gtest/gtest.h>
 
 
 INSTANTIATE_TEST_CASE_P(VmuFsWriteTest, VmuWriteFsTest, 
