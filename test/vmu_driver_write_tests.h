@@ -37,7 +37,7 @@ class VmuWriteFsTest : public ::testing::TestWithParam<VmuFsWriteFile *>
         FAIL() << "Unable to open file: " << GetParam()->write_file_name;
     }
     
-    if (read_fs(vmu_file, file_len, &vmu_fs) != 0) {
+    if (vmufs_read_fs(vmu_file, file_len, &vmu_fs) != 0) {
         FAIL() << "Failed to read FS from: " << GetParam()->vmu_file_name;
     }  
   }

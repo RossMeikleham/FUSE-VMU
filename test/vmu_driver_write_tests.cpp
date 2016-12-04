@@ -44,7 +44,7 @@ TEST_P(VmuWriteFsTest, CorrectlyNormalWrites) {
 
     ASSERT_EQ(3, get_filecount(&vmu_fs));
 
-    int res = write_file(&vmu_fs, "SONIC2__S01", write_file_contents, BLOCK_SIZE_BYTES * 18);   
+    int res = vmufs_write_file(&vmu_fs, "SONIC2__S01", write_file_contents, BLOCK_SIZE_BYTES * 18);   
     ASSERT_EQ(res, 0);
 
     ASSERT_EQ(4, get_filecount(&vmu_fs));
@@ -77,22 +77,22 @@ TEST_P(VmuWriteFsTest, FailsWhenFull) {
         strcpy(buf, "SONIC2___S0");
         buf[MAX_FILENAME_SIZE - 1] = (char)(i + 48);
         buf[MAX_FILENAME_SIZE] = '\0'; 
-        ASSERT_EQ(0, write_file(&vmu_fs, buf, write_file_contents, BLOCK_SIZE_BYTES * 18));
+        ASSERT_EQ(0, vmufs_write_file(&vmu_fs, buf, write_file_contents, BLOCK_SIZE_BYTES * 18));
     }
         
     strcpy(buf, "SONIC2___S0");
     buf[MAX_FILENAME_SIZE - 1] = (char)(i + 48);
     buf[MAX_FILENAME_SIZE] = '\0'; 
 
-    ASSERT_NE(0, write_file(&vmu_fs, buf, write_file_contents, BLOCK_SIZE_BYTES * 18));      
+    ASSERT_NE(0, vmufs_write_file(&vmu_fs, buf, write_file_contents, BLOCK_SIZE_BYTES * 18));      
 } 
 
 
 // Tests that overwriting a file with a file of equal size works correctly
 TEST_P(VmuWriteFsTest, CorrectlyOverwritesEqualSize) {
      
-    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
-    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
+    ASSERT_EQ(0, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
+    ASSERT_EQ(0, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
     ASSERT_EQ(4, get_filecount(&vmu_fs));
     ASSERT_EQ(46, get_allocated_blocks(&vmu_fs));
 }
@@ -101,8 +101,8 @@ TEST_P(VmuWriteFsTest, CorrectlyOverwritesEqualSize) {
 // Tests that overwriting a file with a smaller file works correctly
 TEST_P(VmuWriteFsTest, CorrectlyOverwritesSmallerSize) {
     
-    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
-    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 7));  
+    ASSERT_EQ(0, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
+    ASSERT_EQ(0, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 7));  
     ASSERT_EQ(4, get_filecount(&vmu_fs));
     ASSERT_EQ(35, get_allocated_blocks(&vmu_fs)); 
 }
@@ -111,8 +111,8 @@ TEST_P(VmuWriteFsTest, CorrectlyOverwritesSmallerSize) {
 // Tests that overwriting a file with a larger file works correctly
 TEST_P(VmuWriteFsTest, CorrectlyOverwritesLargerSize) {
     
-    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 5));
-    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
+    ASSERT_EQ(0, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 5));
+    ASSERT_EQ(0, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18));
     ASSERT_EQ(4, get_filecount(&vmu_fs));
     ASSERT_EQ(46, get_allocated_blocks(&vmu_fs));
 }
@@ -121,7 +121,7 @@ TEST_P(VmuWriteFsTest, CorrectlyOverwritesLargerSize) {
 // Tests that removing an existing file works correctly
 TEST_P(VmuWriteFsTest, CorrectlyRemovesIndividualFile) {
 
-    ASSERT_EQ(0, remove_file(&vmu_fs, "SONICADV_INT")); 
+    ASSERT_EQ(0, vmufs_remove_file(&vmu_fs, "SONICADV_INT")); 
     ASSERT_EQ(2, get_filecount(&vmu_fs));
     ASSERT_EQ(18, get_allocated_blocks(&vmu_fs)); 
 }
@@ -129,11 +129,11 @@ TEST_P(VmuWriteFsTest, CorrectlyRemovesIndividualFile) {
 // Tests that removing all files from the filesystem works correctly
 TEST_P(VmuWriteFsTest, CorrectlyRemovesAllFiles) {
     
-    ASSERT_EQ(0, remove_file(&vmu_fs, "EVO_DATA.001")); 
+    ASSERT_EQ(0, vmufs_remove_file(&vmu_fs, "EVO_DATA.001")); 
     ASSERT_EQ(20, get_allocated_blocks(&vmu_fs)); 
-    ASSERT_EQ(0, remove_file(&vmu_fs, "SONICADV_INT")); 
+    ASSERT_EQ(0, vmufs_remove_file(&vmu_fs, "SONICADV_INT")); 
     ASSERT_EQ(10, get_allocated_blocks(&vmu_fs)); 
-    ASSERT_EQ(0, remove_file(&vmu_fs, "SONICADV_INT")); 
+    ASSERT_EQ(0, vmufs_remove_file(&vmu_fs, "SONICADV_INT")); 
     ASSERT_EQ(0, get_allocated_blocks(&vmu_fs)); 
 }
 
@@ -141,7 +141,7 @@ TEST_P(VmuWriteFsTest, CorrectlyRemovesAllFiles) {
 // Test that removing a non existing file fails
 TEST_P(VmuWriteFsTest, FailsToRemoveNonExistingFile) {
 
-    ASSERT_NE(0, remove_file(&vmu_fs, "DOESNT_EXIST")); 
+    ASSERT_NE(0, vmufs_remove_file(&vmu_fs, "DOESNT_EXIST")); 
 }
 
 // Test that writing a file then removing is works correctly
@@ -149,7 +149,7 @@ TEST_P(VmuWriteFsTest, CorrectlyWritesThenRemovesFile) {
     
     int before_blocks = get_allocated_blocks(&vmu_fs);
 
-    ASSERT_EQ(0, write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18)); 
-    ASSERT_EQ(0, remove_file(&vmu_fs, "FILE")); 
+    ASSERT_EQ(0, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, BLOCK_SIZE_BYTES * 18)); 
+    ASSERT_EQ(0, vmufs_remove_file(&vmu_fs, "FILE")); 
     ASSERT_EQ(before_blocks, get_allocated_blocks(&vmu_fs)); 
 }

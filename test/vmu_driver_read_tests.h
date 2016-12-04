@@ -72,7 +72,7 @@ class VmuValidFsTest : public ::testing::TestWithParam<ValidVmuFs *>
         FAIL() << "Unable to open file: " << GetParam()->file_name;
     }
     
-    if (read_fs(file, file_len, &vmu_fs) != 0) {
+    if (vmufs_read_fs(file, file_len, &vmu_fs) != 0) {
         FAIL() << "Failed to read FS from: " << GetParam()->file_name;
     } 
   }
@@ -83,6 +83,39 @@ class VmuValidFsTest : public ::testing::TestWithParam<ValidVmuFs *>
 
 };
 
+class ValidVmuReadEntry : public ValidVmuFs {
+    public:
+        const char *dir_entry_name;
+        uint16_t offset_in_file;
+        uint32_t size_to_read;
+        uint16_t file_start_block;
+        uint16_t file_block_count;
+        
+    ValidVmuReadEntry(const char *file_name, const char *dir_entry_name, uint16_t offset_in_file,
+        uint32_t size_to_read, uint16_t file_start_block, 
+        uint16_t file_block_count) {
+
+        this->file_name = file_name;
+        this->dir_entry_name = dir_entry_name;
+        this->offset_in_file = offset_in_file;
+        this->size_to_read = size_to_read;
+        this->file_start_block = file_start_block;
+        this->file_block_count = file_block_count;
+    }
+};
+
 class VmuValidDirTest : public VmuValidFsTest {};
+
+class VmuValidReadFileTest : public VmuValidFsTest {
+    
+    virtual void SetUp() {
+        VmuValidFsTest::SetUp();
+
+        uint32_t user_data_size = vmu_fs.root_block.user_block_count * BLOCK_SIZE_BYTES;
+        for (uint32_t i = 0; i < user_data_size/sizeof(uint32_t); i++) {
+            memcpy(vmu_fs.img + (i * sizeof(uint32_t)), &i, sizeof(uint32_t));       
+        }   
+    }
+};
 
 #endif

@@ -8,34 +8,8 @@
 
 #include "vmu_driver.h"
 
-static const char *filepath = "/file";
-static const char *filename = "file";
-static const char *filecontent = "I'm the content of the only file available there\n";
-
 // The Filesystem, only 128KB so just keep the entire thing in memory
 static struct vmu_fs vmu_fs;
-
-
-static int get_dir_entry_for_file(const char *path)
-{
-   // File doesn't exist as filename is too large
-  if (strnlen(path, MAX_FILENAME_SIZE + 1) > MAX_FILENAME_SIZE) {
-    return -1;
-  } 
-
-   int matched_dir_entry = -1;
-
-   // Locate the FAT directory entry for the file 
-   for (int i = TOTAL_DIRECTORY_ENTRIES - 1; i >= 0; i--) { 
-       if (!vmu_fs.vmu_file[i].is_free && 
-            strncmp(path, vmu_fs.vmu_file[i].filename, MAX_FILENAME_SIZE) == 0) {
-                 matched_dir_entry = i;
-                 break;
-        }
-    }
-    
-    return matched_dir_entry;
-}
 
 
 static int vmu_getattr(const char *path, struct stat *stbuf) {
@@ -60,16 +34,16 @@ static int vmu_getattr(const char *path, struct stat *stbuf) {
     return -EIO;
   } 
 
-   int matched_dir_entry = get_dir_entry_for_file(path);
+   int dir_entry = vmufs_get_dir_entry(&vmu_fs, path);
 
     // File not found 
-    if (matched_dir_entry == -1) {
+    if (dir_entry == -1) {
         return -EIO;
     }
  
     stbuf->st_mode = S_IFREG | 0777;
     stbuf->st_nlink = 1;
-    stbuf->st_size = vmu_fs.vmu_file[matched_dir_entry].size_in_blocks * BLOCK_SIZE_BYTES;
+    stbuf->st_size = vmu_fs.vmu_file[dir_entry].size_in_blocks * BLOCK_SIZE_BYTES;
     
     return 0; 
 }
@@ -83,24 +57,13 @@ static int vmu_open(const char *path, struct fuse_file_info *file_info)
 static int vmu_read(const char *path, char *buf, size_t size, off_t offset,
     struct fuse_file_info *fi) {
     
-    int matched_dir_entry = get_dir_entry_for_file(path);
-    if (matched_dir_entry < 0)
+    // Remove leading slash when checking filepaths 
+    if (strlen(path) > 0 && strstr(path, "/") == path) 
     {
-        return -EIO;
+      path++;
     }
-
-    size_t len = vmu_fs.vmu_file[dir_entry].size_in_blocks * BLOCK_SIZE_BYTES;
-    if (offset >= len) {
-      return 0;
-    }
-
-    if (offset + size > len) {
-      memcpy(buf, filecontent + offset, len - offset);
-      return len - offset;
-    }
-
-    memcpy(buf, filecontent + offset, size);
-    return size;
+    
+    return vmufs_read_file(&vmu_fs, path, (uint8_t *)buf, size, offset);
 }
 
 static int vmu_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
@@ -120,7 +83,7 @@ static int vmu_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     return 0;
 }
 
-static int vmu_write(const char *path, const char *buf, size_t size, long long dunno,
+static int vmu_write(const char *path, const char *buf, size_t size, off_t offset,
     struct fuse_file_info *fuse_file_info) {
     return -EIO;
 }
@@ -172,7 +135,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Attempt to parse the image into a vmu filesystem structure
-    int fs_parse_result = read_fs(buf, length, &vmu_fs); 
+    int fs_parse_result = vmufs_read_fs(buf, length, &vmu_fs); 
     if (fs_parse_result != 0) 
     {
         fprintf(stderr, "Unable to read VMU filesystem\n");

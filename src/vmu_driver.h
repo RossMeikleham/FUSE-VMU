@@ -1,12 +1,13 @@
 #ifndef VMU_DRIVER_H
 #define VMU_DRIVER_H
 
-#include <stdint.h>
-#include <stdbool.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 #define BLOCK_SIZE_BYTES 512
 #define TOTAL_BLOCKS 256
@@ -48,6 +49,19 @@ struct root_block {
     uint16_t user_block_count; // How many blocks are available to the user
 };
 
+// Standard header used by the file manager to display info about the file
+struct vms_header {
+    char vms_file_description[16]; // Description of file shown in VMS file menu
+    char boot_ROM_file_description[32]; // Description of file shown in boot ROM file manager
+    char application_creation_id[16]; // Id of application that created the file
+    uint16_t no_of_icons;
+    uint16_t icon_animation_speed;
+    uint16_t graphic_eyecatch_type;
+    uint16_t crc;
+    uint32_t bytes_of_file_data; // Bytes of file data following header
+    uint16_t icon_palette[16];
+};
+
 // Directory information on an individual file
 struct vmu_file {
     bool is_free; // Whether the directory entry contains a file or not
@@ -71,20 +85,33 @@ struct vmu_fs {
 // Convert 2 bytes into a 16 bit little endian integer
 uint16_t to_16bit_le(const uint8_t *img);
 
+int vmufs_next_block(const struct vmu_fs *vmu_fs, uint16_t block_no);
+
+// Obtains the directory entry offset for the given file path
+// in the filesystem. Returns -1 if it cannot be found
+int vmufs_get_dir_entry(const struct vmu_fs *vmu_fs, const char *path);
 
 // Read basic filesystem structures from vmu image
-int read_fs(uint8_t *img, const unsigned length, struct vmu_fs*);
+int vmufs_read_fs(uint8_t *img, const unsigned length, struct vmu_fs*);
 
+
+// Read a file from the vmu filesystem
+// returns the number of bytes successfully read
+int vmufs_read_file(const struct vmu_fs *vmu_fs, 
+    const char *file_name, 
+    uint8_t *buf, 
+    size_t size, 
+    uint64_t offset);  
 
 // Write a file into the vmu filesystem
-int write_file(struct vmu_fs *vmu_fs, 
+int vmufs_write_file(struct vmu_fs *vmu_fs, 
     const char *file_name, 
     const uint8_t *file_contents, 
     const unsigned file_length);
 
 
 // Remove a file from the filesystem
-int remove_file(struct vmu_fs *vmu_fs, const char *file_name);
+int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *path);
 
 #ifdef __cplusplus
 }

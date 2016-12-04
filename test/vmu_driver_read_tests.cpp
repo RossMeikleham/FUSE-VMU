@@ -81,3 +81,58 @@ TEST_P(VmuValidDirTest, ReadsDirCorrect) {
             FAIL() << "Was unable to locate " << entries.size() << " entry(s) in the filesystem";
         }
 }
+
+
+INSTANTIATE_TEST_CASE_P(VmuValidReadTest, VmuValidReadFileTest, 
+    testing::Values(
+        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", 0, BLOCK_SIZE_BYTES, 199, 18),
+        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", 0, BLOCK_SIZE_BYTES * 18, 199, 18),
+        new ValidVmuReadEntry("../vmu_a.bin", "SONICADV_INT", 28, BLOCK_SIZE_BYTES, 181, 10),
+        new ValidVmuReadEntry("../vmu_a.bin", "EVO_DATA.001", 524, 24, 171, 8),
+        new ValidVmuReadEntry("../vmu_a.bin", "EVO_DATA.001", BLOCK_SIZE_BYTES * 7, 256, 171, 8),
+        new ValidVmuReadEntry("../vmu_a.bin", "SONICADV_INT", 1004, 1024, 181, 10)
+        ));
+
+
+
+// Checks that full blocks can be read from files correctly
+TEST_P(VmuValidReadFileTest, ReadsBlocksCorrect) {
+   
+    ValidVmuReadEntry *entry = (ValidVmuReadEntry *)GetParam();
+
+    uint8_t *buf = new uint8_t[entry->size_to_read];
+    int bytes_read =vmufs_read_file(&vmu_fs, entry->dir_entry_name, buf, 
+        entry->size_to_read, entry->offset_in_file);  
+    
+    // Check correct number of bytes have been reported as read
+    ASSERT_EQ(entry->size_to_read, bytes_read);
+
+    // Traverse to the block where we should of started reading from
+    int cur_block_no = entry->file_start_block;
+    for (int i = 0; i < entry->offset_in_file / BLOCK_SIZE_BYTES; i++)
+    {
+        cur_block_no = vmufs_next_block(&vmu_fs, cur_block_no);
+    }
+    uint32_t offset = cur_block_no * BLOCK_SIZE_BYTES + (entry->offset_in_file % BLOCK_SIZE_BYTES);
+    
+    int i = 0;
+    while (i < bytes_read) {
+        do {
+        
+            uint32_t actual;
+            memcpy(&actual, buf + i, sizeof(uint32_t));
+
+            uint32_t expected;
+            memcpy(&expected, vmu_fs.img + offset, sizeof(uint32_t));
+
+            ASSERT_EQ(expected, actual);
+            i += sizeof(uint32_t);
+            offset += sizeof(uint32_t);
+        } while (i < bytes_read && (offset % BLOCK_SIZE_BYTES != 0));
+
+        cur_block_no = vmufs_next_block(&vmu_fs, cur_block_no);
+        offset = cur_block_no * BLOCK_SIZE_BYTES;
+    }
+
+    delete[] buf;
+}

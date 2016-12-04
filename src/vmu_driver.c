@@ -8,27 +8,6 @@
 #include <errno.h>
 #include <stdio.h>
 
-int stat_vmu_fs(const struct vmu_fs *vmu_fs, const char *path, struct stat *stbuf) {
-   
-   if (strnlen(path, MAX_FILENAME_SIZE) >= MAX_FILENAME_SIZE) {
-       return -ENOENT;
-   } 
-  
-   for (int i = 0; i < TOTAL_DIRECTORY_ENTRIES ; i++) {
-        if (vmu_fs->vmu_file[i].is_free) 
-            continue;
-
-        if (strncmp(path, vmu_fs->vmu_file[i].filename, MAX_FILENAME_SIZE) == 0) {
-            stbuf->st_mode = S_IFREG | 0777;
-            stbuf->st_nlink = 1;
-            stbuf->st_size = vmu_fs->vmu_file[i].size_in_blocks * BLOCK_SIZE_BYTES;
-            return 0;    
-        }
-   }
-
-   return -ENOENT;
-}   
-
 uint16_t to_16bit_le(const uint8_t *img) {
     return img[0] | (img[1] << 8);
 }
@@ -52,7 +31,31 @@ static struct timestamp create_timestamp(const uint8_t *img) {
     return ts;
 }
 
-int read_fs(uint8_t *img, const unsigned length, struct vmu_fs *vmu_fs) {
+int vmufs_get_dir_entry(const struct vmu_fs *vmu_fs, const char *path)
+{
+    int matched_dir_entry = -1;
+
+    for (int i = TOTAL_DIRECTORY_ENTRIES - 1; i >= 0; i--) { 
+        bool is_free = !vmu_fs->vmu_file[i].is_free;
+        const char *filename = vmu_fs->vmu_file[i].filename;
+        if (is_free && strncmp(path, filename, MAX_FILENAME_SIZE) == 0) {
+            matched_dir_entry = i;
+            break;                
+        }
+    }
+
+    return matched_dir_entry;
+}
+
+
+int vmufs_next_block(const struct vmu_fs *vmu_fs, uint16_t block_no) {
+    int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location; 
+    int next_block_fat_addr = fat_block_addr + (block_no * 2);
+    return to_16bit_le(vmu_fs->img + next_block_fat_addr);
+}
+
+
+int vmufs_read_fs(uint8_t *img, const unsigned length, struct vmu_fs *vmu_fs) {
     
     // VMU fs should be EXACTLY 128KB
     if (length != BLOCK_SIZE_BYTES * TOTAL_BLOCKS) {
@@ -121,8 +124,85 @@ int read_fs(uint8_t *img, const unsigned length, struct vmu_fs *vmu_fs) {
     return 0;
 }
 
-  
-int write_file(struct vmu_fs *vmu_fs, 
+int vmufs_read_file(const struct vmu_fs *vmu_fs, 
+    const char *path, 
+    uint8_t *buf, 
+    size_t size, 
+    uint64_t offset)
+{
+    int dir_entry = vmufs_get_dir_entry(vmu_fs, path);
+    if (dir_entry < 0)
+    {
+        return -EIO;
+    }
+
+    // If the given offset is larger than the filesize or the requested
+    // number of bytes to read is 0 then we don't need to do anything
+    size_t file_length = vmu_fs->vmu_file[dir_entry].size_in_blocks * BLOCK_SIZE_BYTES;
+    if (offset >= file_length || size == 0) {
+      return 0;
+    }
+
+    size = offset + size > file_length ? file_length - offset : size;
+    size_t copied = 0;
+
+    // Read through the file until reaching the block where we need
+    // to start copying
+    uint16_t cur_block = vmu_fs->vmu_file[dir_entry].starting_block;
+    for (int blocks_read = 0; blocks_read < offset / BLOCK_SIZE_BYTES; blocks_read++) {
+        // Something wrong with the file in the FS shouldn't reach
+        // the end, or be higher than the max number of blocks
+        if (cur_block >= vmu_fs->root_block.user_block_count) {
+            return -EIO;
+        }
+
+        cur_block = vmufs_next_block(vmu_fs, cur_block);
+    }
+
+    // Copy the offset into the first block til the end of that block
+    int offset_bytes = offset % BLOCK_SIZE_BYTES;
+    
+    if (offset_bytes != 0) {
+        int bytes_to_copy = BLOCK_SIZE_BYTES - offset_bytes;
+        bytes_to_copy = size > bytes_to_copy ? bytes_to_copy : size;
+        memcpy(buf, vmu_fs->img + (cur_block * BLOCK_SIZE_BYTES) + offset_bytes, bytes_to_copy); 
+        // We've read all that we need to
+        if (bytes_to_copy == size) {
+            return size;
+        }
+
+        copied += bytes_to_copy;
+        cur_block = vmufs_next_block(vmu_fs, cur_block);
+    }
+
+    // Bytes to read in the last block (if not block alligned)
+    int leftover_bytes = (offset + size) % BLOCK_SIZE_BYTES;
+
+    // Copy all Full blocks
+    int full_blocks = (size / BLOCK_SIZE_BYTES) + !!(size % BLOCK_SIZE_BYTES) -   
+        ((offset_bytes != 0) || (leftover_bytes != 0)); 
+
+    for (int blocks_read = 0; blocks_read < full_blocks; blocks_read++) {
+        
+        if (cur_block >= vmu_fs->root_block.user_block_count) {
+            return -EIO;
+        }
+
+        memcpy(buf + copied, vmu_fs->img + (cur_block * BLOCK_SIZE_BYTES), BLOCK_SIZE_BYTES);
+        copied += BLOCK_SIZE_BYTES;        
+        cur_block = vmufs_next_block(vmu_fs, cur_block);
+    }
+
+    // Copy the leftover bytes
+    if (leftover_bytes > 0) {
+        memcpy(buf + copied, vmu_fs->img + (cur_block * BLOCK_SIZE_BYTES), leftover_bytes);
+    }
+
+    return size;
+}
+
+
+int vmufs_write_file(struct vmu_fs *vmu_fs, 
     const char *file_name, 
     const uint8_t *file_contents, 
     const unsigned file_length) 
@@ -262,7 +342,7 @@ int write_file(struct vmu_fs *vmu_fs,
     return 0;
 }
 
-int remove_file(struct vmu_fs *vmu_fs, const char *file_name) 
+int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *file_name) 
 {
     // File doesn't exist as filename is too large
     if (strnlen(file_name, MAX_FILENAME_SIZE + 1) > MAX_FILENAME_SIZE) {
