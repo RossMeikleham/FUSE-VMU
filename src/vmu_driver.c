@@ -31,6 +31,55 @@ static struct timestamp create_timestamp(const uint8_t *img) {
     return ts;
 }
 
+static uint8_t bcd_to_byte(uint8_t bcd) {
+    return (((bcd & 0xF0) >> 4 ) * 10) + (bcd & 0x0F);
+}
+
+static bool is_leap_year(uint64_t year) {
+    return (year % 400 == 0) || (!(year % 100 == 0) && year % 4 == 0);
+}
+
+// Yay dates 
+time_t get_creation_time(const struct vmu_file *vmu_file)
+{
+    const struct timestamp *ts = &(vmu_file->timestamp);
+   
+   // translate bcd values into actual integers
+    uint8_t century = bcd_to_byte(ts->century);
+    uint8_t year = bcd_to_byte(ts->year);
+    uint8_t month = bcd_to_byte(ts->month);
+    uint8_t day = bcd_to_byte(ts->day);
+    uint8_t hour = bcd_to_byte(ts->hour);
+    uint8_t minute = bcd_to_byte(ts->minute);
+    uint8_t second = bcd_to_byte(ts->second);
+
+    // Check date is after Unix Epoch (1/1/1970)
+    if (ts->century < 20) {
+        if (!(ts->century == 19 && ts->year >= 70)) {
+            return 0;
+        }
+    }
+
+    uint64_t full_year = (century * 100) + year;
+    uint64_t full_days = 0;
+    for (uint64_t i = 1970; i < full_year; i++) 
+    {
+        full_days += 365 + is_leap_year(i);
+    }
+
+    const uint8_t days_in_month[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    for (uint8_t i = 1; i <= month; i++) {
+        full_days += days_in_month[i-1];
+    }
+    
+    if ((month == 1 && day == 29) || (month > 1 && is_leap_year(full_year))) {
+        full_days++;
+    }
+
+    time_t time = ((((full_days * 24) + hour) * 60 + minute) * 60 + second); 
+    return time;
+} 
+
 int vmufs_get_dir_entry(const struct vmu_fs *vmu_fs, const char *path)
 {
     int matched_dir_entry = -1;

@@ -44,7 +44,14 @@ static int vmu_getattr(const char *path, struct stat *stbuf) {
     stbuf->st_mode = S_IFREG | 0777;
     stbuf->st_nlink = 1;
     stbuf->st_size = vmu_fs.vmu_file[dir_entry].size_in_blocks * BLOCK_SIZE_BYTES;
-    
+    stbuf->st_atime = get_creation_time(&vmu_fs.vmu_file[dir_entry]);
+    stbuf->st_mtime = stbuf->st_atime;
+    stbuf->st_ctime = stbuf->st_atime;
+
+    char buff[30];
+    strftime(buff, 30, "%Y-%m-%d %H:%M:%S", localtime(&stbuf->st_atime));
+    fprintf(stderr, "%s\n", buff);
+
     return 0; 
 }
 

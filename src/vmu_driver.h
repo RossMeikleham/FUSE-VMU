@@ -8,6 +8,7 @@ extern "C" {
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <time.h>
 
 #define BLOCK_SIZE_BYTES 512
 #define TOTAL_BLOCKS 256
@@ -86,6 +87,9 @@ struct vmu_fs {
 uint16_t to_16bit_le(const uint8_t *img);
 
 int vmufs_next_block(const struct vmu_fs *vmu_fs, uint16_t block_no);
+
+// Obtains the creation time of a file
+time_t get_creation_time(const struct vmu_file *vmu_file);
 
 // Obtains the directory entry offset for the given file path
 // in the filesystem. Returns -1 if it cannot be found

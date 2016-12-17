@@ -95,7 +95,7 @@ INSTANTIATE_TEST_CASE_P(VmuValidReadTest, VmuValidReadFileTest,
 
 
 
-// Checks that full blocks can be read from files correctly
+// Checks that blocks can be read from files correctly
 TEST_P(VmuValidReadFileTest, ReadsBlocksCorrect) {
    
     ValidVmuReadEntry *entry = (ValidVmuReadEntry *)GetParam();
