@@ -99,6 +99,12 @@ int vmufs_get_dir_entry(const struct vmu_fs *vmu_fs, const char *path);
 int vmufs_read_fs(uint8_t *img, const unsigned length, struct vmu_fs*);
 
 
+// Attempts to rename a file in the vmu filesystem
+// returns 0 if successful, -EIO otherwise
+int vmufs_rename_file(struct vmu_fs *vmu_fs, 
+    const char *from, 
+    const char *to); 
+
 // Read a file from the vmu filesystem
 // returns the number of bytes successfully read
 int vmufs_read_file(const struct vmu_fs *vmu_fs, 
@@ -107,12 +113,11 @@ int vmufs_read_file(const struct vmu_fs *vmu_fs,
     size_t size, 
     uint64_t offset);  
 
-// Write a file into the vmu filesystem
 int vmufs_write_file(struct vmu_fs *vmu_fs, 
-    const char *file_name, 
-    const uint8_t *file_contents, 
-    const unsigned file_length);
-
+    const char *path, 
+    uint8_t *buf, 
+    size_t size, 
+    uint64_t offset);
 
 // Remove a file from the filesystem
 int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *path);

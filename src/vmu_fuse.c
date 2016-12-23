@@ -48,10 +48,6 @@ static int vmu_getattr(const char *path, struct stat *stbuf) {
     stbuf->st_mtime = stbuf->st_atime;
     stbuf->st_ctime = stbuf->st_atime;
 
-    char buff[30];
-    strftime(buff, 30, "%Y-%m-%d %H:%M:%S", localtime(&stbuf->st_atime));
-    fprintf(stderr, "%s\n", buff);
-
     return 0; 
 }
 
@@ -90,9 +86,26 @@ static int vmu_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     return 0;
 }
 
+static int vmu_rename(const char *from, const char *to) 
+{
+    return vmufs_rename_file(&vmu_fs, from, to);
+} 
+
 static int vmu_write(const char *path, const char *buf, size_t size, off_t offset,
     struct fuse_file_info *fuse_file_info) {
-    return -EIO;
+    
+    // Remove leading slash when checking filepaths 
+    if (strlen(path) > 0 && strstr(path, "/") == path) 
+    {
+      path++;
+    }
+    
+    return vmufs_write_file(&vmu_fs, path, (uint8_t *)buf, size, offset);
+}
+
+static int unlink(const char *path) 
+{
+    return vmu_fs_remove_file(&vmu_fs, path);
 }
 
 static int vmu_access(const char *path, int res) {
@@ -103,8 +116,10 @@ static struct fuse_operations fuse_operations = {
     .getattr = vmu_getattr,
     .open = vmu_open,
     .read = vmu_read,
-    .readdir = vmu_readdir
-//    .write = vmu_write,
+    .readdir = vmu_readdir,
+    .rename = vmu_rename,
+    .unlink = vmu_unlink,
+    .write = vmu_write,
 //    .access = vmu_access
     
 
