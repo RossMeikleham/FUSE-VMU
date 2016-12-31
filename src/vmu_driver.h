@@ -50,19 +50,6 @@ struct root_block {
     uint16_t user_block_count; // How many blocks are available to the user
 };
 
-// Standard header used by the file manager to display info about the file
-struct vms_header {
-    char vms_file_description[16]; // Description of file shown in VMS file menu
-    char boot_ROM_file_description[32]; // Description of file shown in boot ROM file manager
-    char application_creation_id[16]; // Id of application that created the file
-    uint16_t no_of_icons;
-    uint16_t icon_animation_speed;
-    uint16_t graphic_eyecatch_type;
-    uint16_t crc;
-    uint32_t bytes_of_file_data; // Bytes of file data following header
-    uint16_t icon_palette[16];
-};
-
 // Directory information on an individual file
 struct vmu_file {
     bool is_free; // Whether the directory entry contains a file or not
@@ -86,7 +73,7 @@ struct vmu_fs {
 // Convert 2 bytes into a 16 bit little endian integer
 uint16_t to_16bit_le(const uint8_t *img);
 
-int vmufs_next_block(const struct vmu_fs *vmu_fs, uint16_t block_no);
+int32_t vmufs_next_block(const struct vmu_fs *vmu_fs, uint16_t block_no);
 
 // Obtains the creation time of a file
 time_t get_creation_time(const struct vmu_file *vmu_file);

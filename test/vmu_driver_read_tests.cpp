@@ -85,12 +85,36 @@ TEST_P(VmuValidDirTest, ReadsDirCorrect) {
 
 INSTANTIATE_TEST_CASE_P(VmuValidReadTest, VmuValidReadFileTest, 
     testing::Values(
-        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", 0, BLOCK_SIZE_BYTES, 199, 18),
-        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", 0, BLOCK_SIZE_BYTES * 18, 199, 18),
-        new ValidVmuReadEntry("../vmu_a.bin", "SONICADV_INT", 28, BLOCK_SIZE_BYTES, 181, 10),
-        new ValidVmuReadEntry("../vmu_a.bin", "EVO_DATA.001", 524, 24, 171, 8),
-        new ValidVmuReadEntry("../vmu_a.bin", "EVO_DATA.001", BLOCK_SIZE_BYTES * 7, 256, 171, 8),
-        new ValidVmuReadEntry("../vmu_a.bin", "SONICADV_INT", 1004, 1024, 181, 10)
+        // Check reading a single block from the start of the file works correctly
+        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", 0, 
+            BLOCK_SIZE_BYTES, BLOCK_SIZE_BYTES, 199, 18),
+        // Check reading all the bytes from the file works correctly
+        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", 0, 
+            BLOCK_SIZE_BYTES * 18, BLOCK_SIZE_BYTES * 18, 199, 18),
+        // Check reading a block of bytes from an offset < 1 block into the 
+        // file works correctly
+        new ValidVmuReadEntry("../vmu_a.bin", "SONICADV_INT", 28, 
+            BLOCK_SIZE_BYTES, BLOCK_SIZE_BYTES, 181, 10),
+        // Check reading < 1 block of data from an offset > 1 block into the
+        // file works correctly
+        new ValidVmuReadEntry("../vmu_a.bin", "EVO_DATA.001", 
+            524, 24, 24, 171, 8),
+        // Check reading from a block offset into the file data works
+        // correctly
+        new ValidVmuReadEntry("../vmu_a.bin", "EVO_DATA.001", 
+            BLOCK_SIZE_BYTES * 5, 256, 256, 171, 8),
+        // Check reading multiple blocks of data from an offset > 1 block into
+        // the file works correctly
+        new ValidVmuReadEntry("../vmu_a.bin", "SONICADV_INT", 1004, 
+            1024, 1024, 181, 10),
+        // Check attempting to read more than the total 
+        // number of bytes from the file works correctly
+        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", 0, 
+            BLOCK_SIZE_BYTES * 19, BLOCK_SIZE_BYTES * 18, 199, 18),
+        // Check reading at an offset past the end of the filedata
+        // works correctly
+        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", BLOCK_SIZE_BYTES * 18, 
+            27, 0, 199, 18)
         ));
 
 
@@ -101,20 +125,32 @@ TEST_P(VmuValidReadFileTest, ReadsBlocksCorrect) {
     ValidVmuReadEntry *entry = (ValidVmuReadEntry *)GetParam();
 
     uint8_t *buf = new uint8_t[entry->size_to_read];
-    int bytes_read =vmufs_read_file(&vmu_fs, entry->dir_entry_name, buf, 
+    int bytes_read = vmufs_read_file(&vmu_fs, entry->dir_entry_name, buf, 
         entry->size_to_read, entry->offset_in_file);  
     
+    // Check operation was sucessful
+    ASSERT_FALSE(bytes_read < 0);
+
+    // If no bytes were read no need to check the content of
+    // what was read
+    if (bytes_read == 0) {
+        return;
+    } 
+
     // Check correct number of bytes have been reported as read
-    ASSERT_EQ(entry->size_to_read, bytes_read);
+    ASSERT_EQ(entry->size_expected_to_be_read, bytes_read);
 
     // Traverse to the block where we should of started reading from
     int cur_block_no = entry->file_start_block;
-    for (int i = 0; i < entry->offset_in_file / BLOCK_SIZE_BYTES; i++)
+    int blocks_to_read = entry->offset_in_file / BLOCK_SIZE_BYTES;
+     
+    for (int i = 0; i < blocks_to_read; i++)
     {
         cur_block_no = vmufs_next_block(&vmu_fs, cur_block_no);
     }
-    uint32_t offset = cur_block_no * BLOCK_SIZE_BYTES + (entry->offset_in_file % BLOCK_SIZE_BYTES);
-    
+    uint32_t offset = cur_block_no * BLOCK_SIZE_BYTES + 
+        (entry->offset_in_file % BLOCK_SIZE_BYTES);
+     
     int i = 0;
     while (i < bytes_read) {
         do {

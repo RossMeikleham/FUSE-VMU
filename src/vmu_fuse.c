@@ -103,9 +103,10 @@ static int vmu_write(const char *path, const char *buf, size_t size, off_t offse
     return vmufs_write_file(&vmu_fs, path, (uint8_t *)buf, size, offset);
 }
 
-static int unlink(const char *path) 
+static int vmu_unlink(const char *path) 
 {
-    return vmu_fs_remove_file(&vmu_fs, path);
+    return -EIO;
+   // return vmu_fs_remove_file(&vmu_fs, path);
 }
 
 static int vmu_access(const char *path, int res) {
@@ -118,7 +119,7 @@ static struct fuse_operations fuse_operations = {
     .read = vmu_read,
     .readdir = vmu_readdir,
     .rename = vmu_rename,
-    .unlink = vmu_unlink,
+  //  .unlink = vmu_unlink,
     .write = vmu_write,
 //    .access = vmu_access
     

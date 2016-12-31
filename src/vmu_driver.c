@@ -96,9 +96,6 @@ time_t get_creation_time(const struct vmu_file *vmu_file)
         full_days += days_in_month[i-1];
     }
     
-    if ((month == 1 && day == 29) || (month > 1 && is_leap_year(full_year))) {
-        full_days++;
-    }
 
     time_t time = ((((full_days * 24) + hour) * 60 + minute) * 60 + second); 
     return time;
@@ -121,13 +118,31 @@ int vmufs_get_dir_entry(const struct vmu_fs *vmu_fs, const char *path)
 }
 
 
-int vmufs_next_block(const struct vmu_fs *vmu_fs, uint16_t block_no) {
-    int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location; 
-    int next_block_fat_addr = fat_block_addr + (block_no * 2);
+int32_t vmufs_next_block(const struct vmu_fs *vmu_fs, uint16_t block_no) {
+    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location; 
+    const int next_block_fat_addr = fat_block_addr + (block_no * 2);
     return to_16bit_le(vmu_fs->img + next_block_fat_addr);
 }
 
+// Attempts to locate a free block counting down from the given
+// block number, returns the block number > 0 if sucessful, -1 otherwise
+static int32_t vmufs_next_free_block(const struct vmu_fs *vmu_fs, uint16_t block_no) {
+    
+    const int fat_block_addr = BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location;
+    for (;;) {
 
+        const int next_block_fat_addr = fat_block_addr + (block_no * 2);
+        if (to_16bit_le(vmu_fs->img + next_block_fat_addr) == 0xFFFC) {
+            return block_no;
+        }
+
+        if (block_no == 0) {
+            return -1;
+        }
+        block_no--;
+    }
+}
+    
 int vmufs_read_fs(uint8_t *img, const unsigned length, struct vmu_fs *vmu_fs) {
     
     // VMU fs should be EXACTLY 128KB
@@ -155,6 +170,8 @@ int vmufs_read_fs(uint8_t *img, const unsigned length, struct vmu_fs *vmu_fs) {
     vmu_fs->root_block.icon_shape = to_16bit_le(img + (root_block_addr + 0x4E)); 
     vmu_fs->root_block.user_block_count = to_16bit_le(img + (root_block_addr + 0x50));     
 
+    vmu_fs->img = img;
+    
     int dir_block_start = vmu_fs->root_block.directory_location;
 
     for (int i = 0; i < TOTAL_DIRECTORY_ENTRIES; i++) {
@@ -189,10 +206,8 @@ int vmufs_read_fs(uint8_t *img, const unsigned length, struct vmu_fs *vmu_fs) {
        
        vmu_fs->vmu_file[i].timestamp = create_timestamp(img + dir_entry_offset + 0x10);
        vmu_fs->vmu_file[i].size_in_blocks = to_16bit_le(img + dir_entry_offset + 0x18);
-       vmu_fs->vmu_file[i].offset_in_blocks = to_16bit_le(img + dir_entry_offset + 0x1A);
+       vmu_fs->vmu_file[i].offset_in_blocks = to_16bit_le(img + dir_entry_offset + 0x1A); 
     }
-
-    vmu_fs->img = img;
 
     return 0;
 }
@@ -263,9 +278,11 @@ int vmufs_read_file(const struct vmu_fs *vmu_fs,
 
     // If the given offset is larger than the filesize or the requested
     // number of bytes to read is 0 then we don't need to do anything
-    size_t file_length = vmu_fs->vmu_file[dir_entry].size_in_blocks * BLOCK_SIZE_BYTES;
+    size_t file_length = vmu_fs->vmu_file[dir_entry].size_in_blocks * 
+        BLOCK_SIZE_BYTES;
+
     if (offset >= file_length || size == 0) {
-      return 0;
+        return 0;
     }
 
     size = offset + size > file_length ? file_length - offset : size;
@@ -274,7 +291,7 @@ int vmufs_read_file(const struct vmu_fs *vmu_fs,
     // Read through the file until reaching the block where we need
     // to start copying
     uint16_t cur_block = vmu_fs->vmu_file[dir_entry].starting_block;
-    for (int blocks_read = 0; blocks_read < offset / BLOCK_SIZE_BYTES; blocks_read++) {
+    for (int blocks_read = 0; blocks_read < (offset / BLOCK_SIZE_BYTES); blocks_read++) {
     
         // Something wrong with the file in the FS shouldn't reach
         // the end, or be higher than the max number of blocks
@@ -298,6 +315,11 @@ int vmufs_read_file(const struct vmu_fs *vmu_fs,
         }
 
         copied += bytes_to_copy;
+        
+        if (cur_block >= vmu_fs->root_block.user_block_count) {
+            return -EIO;
+        }
+
         cur_block = vmufs_next_block(vmu_fs, cur_block);
     }
 
@@ -305,8 +327,7 @@ int vmufs_read_file(const struct vmu_fs *vmu_fs,
     int leftover_bytes = (offset + size) % BLOCK_SIZE_BYTES;
 
     // Copy all Full blocks
-    int full_blocks = (size / BLOCK_SIZE_BYTES) + !!(size % BLOCK_SIZE_BYTES) -   
-        ((offset_bytes != 0) || (leftover_bytes != 0)); 
+    int full_blocks = (size - copied) / BLOCK_SIZE_BYTES;
 
     for (int blocks_read = 0; blocks_read < full_blocks; blocks_read++) {
         
@@ -321,6 +342,11 @@ int vmufs_read_file(const struct vmu_fs *vmu_fs,
 
     // Copy the leftover bytes
     if (leftover_bytes > 0) {
+        
+        if (cur_block >= vmu_fs->root_block.user_block_count) {
+            return -EIO;
+        }
+
         memcpy(buf + copied, vmu_fs->img + (cur_block * BLOCK_SIZE_BYTES), leftover_bytes);
     }
 
@@ -399,6 +425,17 @@ int vmufs_write_file(struct vmu_fs *vmu_fs,
         vmu_fs->vmu_file[first_free_dir_entry].size_in_blocks = blocks_needed;
         vmu_fs->vmu_file[first_free_dir_entry].offset_in_blocks = 0;
         matched_dir_entry = first_free_dir_entry; 
+
+        uint16_t block_no = vmu_fs->root_block.user_block_count;
+        int32_t free_block = vmufs_next_free_block(vmu_fs, block_no);
+
+        if (free_block == -1) {
+            fprintf(stderr, "Ran out of space\n");
+            return -EIO;            
+        }
+        
+        vmu_fs->vmu_file[first_free_dir_entry].starting_block = free_block;
+        write_16bit_le(img + fat_block_addr + (free_block * 2), 0xFFFA);
     }
 
     // No file content to write, we can stop here
@@ -423,28 +460,20 @@ int vmufs_write_file(struct vmu_fs *vmu_fs,
         }
     }
 
-    int block_no = vmu_fs->root_block.user_block_count - 1;
+    int32_t block_no = vmu_fs->root_block.user_block_count - 1;
     
     // Need to create blocks to skip over
     while (offset_left >= BLOCK_SIZE_BYTES) {
         
        bool block_free;
        uint8_t *next_block;
-    
-       // Locate next free block
-       do {
-          next_block = img + fat_block_addr + (block_no * 2);
-          block_free = to_16bit_le(next_block) == 0xFFFC;
-          if (!block_free) {
-              block_no--;
-          }
-       } while (!block_free && block_no >= 0);
+       
+       block_no = vmufs_next_free_block(vmu_fs, block_no);
 
-       // All blocks are being used
-       if (!block_free) {
-            fprintf(stderr, "Ran out of space\n");
-            return -EIO;
-       }
+       if (block_no == -1) {
+           fprintf(stderr, "Ran out of space\n");
+           return -EIO;            
+        }
 
        if (prev_block == 0xFFFF) { 
             vmu_fs->vmu_file[matched_dir_entry].starting_block = block_no;
@@ -472,7 +501,7 @@ int vmufs_write_file(struct vmu_fs *vmu_fs,
             int bytes_to_write = blocks_needed == 1 && leftover_bytes ? 
                 leftover_bytes :
                 BLOCK_SIZE_BYTES;
-            printf("cur_block %d bytes to write %d\n", cur_block, bytes_to_write); 
+       //     printf("cur_block %d bytes to write %d\n", cur_block, bytes_to_write); 
 
             memcpy(img + (cur_block * BLOCK_SIZE_BYTES), buf + bytes_written, bytes_to_write);
             bytes_written += bytes_to_write;
@@ -480,7 +509,7 @@ int vmufs_write_file(struct vmu_fs *vmu_fs,
             blocks_needed--;
         }
     }
-    printf("bytes written %d, size %d\n", bytes_written, size);
+    //printf("bytes written %d, size %d\n", bytes_written, size);
     // Need to create blocks to write content to
     while (bytes_written < size) {
         
@@ -490,7 +519,7 @@ int vmufs_write_file(struct vmu_fs *vmu_fs,
         int bytes_to_write = size - bytes_written < BLOCK_SIZE_BYTES ?
             leftover_bytes :
             BLOCK_SIZE_BYTES;
-        printf("bytes to write %d\n", bytes_to_write);
+       // printf("bytes to write %d\n", bytes_to_write);
        // Locate next free block
        do {
           next_block = img + fat_block_addr + (block_no * 2);
@@ -506,7 +535,7 @@ int vmufs_write_file(struct vmu_fs *vmu_fs,
             return -EIO;
        }
 
-       printf("cur_block %d next_block %d\n", cur_block, block_no);
+       //printf("cur_block %d next_block %d\n", cur_block, block_no);
 
        if (prev_block == 0xFFFF) { 
            vmu_fs->vmu_file[matched_dir_entry].starting_block = block_no;
@@ -527,6 +556,7 @@ int vmufs_write_file(struct vmu_fs *vmu_fs,
     if (new_blocks_used > current_blocks_used) {
         vmu_fs->vmu_file[matched_dir_entry].size_in_blocks = new_blocks_used;
     }
+
     return bytes_written;
 }
 
@@ -572,5 +602,22 @@ int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *file_name)
     return 0;
 }
 
+int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size) 
+{
 
-
+   // VMU filesizes are always in blocks
+   uint16_t blocks_required =  (size / blocks + !!(size % blocks));
+   
+   int dir_entry = vmufs_get_dir_entry(vmu_fs, path);
+   if (dir_entry < 0) {
+       fprintf(stderr, "Could not find file \"%s\"\n", path);
+   }
+   
+   if (size > TOTAL_BLOCKS * BLOCK_SIZE_BYTES) {
+      fprintf(stderr, "Not enough space to increase the filesize of %s to %lld bytes\n",
+        path, size);
+   }
+ 
+   uint16_t blocks_required =  (size / blocks + !!(size % blocks));
+   return -EIO; 
+}

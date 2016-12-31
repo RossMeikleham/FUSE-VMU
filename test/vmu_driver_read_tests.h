@@ -88,17 +88,19 @@ class ValidVmuReadEntry : public ValidVmuFs {
         const char *dir_entry_name;
         uint16_t offset_in_file;
         uint32_t size_to_read;
+        uint32_t size_expected_to_be_read;
         uint16_t file_start_block;
         uint16_t file_block_count;
         
     ValidVmuReadEntry(const char *file_name, const char *dir_entry_name, uint16_t offset_in_file,
-        uint32_t size_to_read, uint16_t file_start_block, 
+        uint32_t size_to_read, uint32_t size_expected_to_be_read, uint16_t file_start_block, 
         uint16_t file_block_count) {
 
         this->file_name = file_name;
         this->dir_entry_name = dir_entry_name;
         this->offset_in_file = offset_in_file;
         this->size_to_read = size_to_read;
+        this->size_expected_to_be_read = size_expected_to_be_read;
         this->file_start_block = file_start_block;
         this->file_block_count = file_block_count;
     }

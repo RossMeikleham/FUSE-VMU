@@ -53,6 +53,7 @@ TEST_P(VmuWriteFsTest, CorrectlyNormalWrites) {
     bool correct_starting_block = false;
     for (int i = 0; i < TOTAL_DIRECTORY_ENTRIES; i++) {
         if (!vmu_fs.vmu_file[i].is_free) {
+            printf("starting block %d\n", vmu_fs.vmu_file[i].starting_block);
             if (vmu_fs.vmu_file[i].starting_block == 199) {
                 correct_starting_block = true;
                 break;
@@ -95,8 +96,10 @@ TEST_P(VmuWriteFsTest, FailsWhenFull) {
 TEST_P(VmuWriteFsTest, CorrectlyOverwritesEqualSize) {
      
     int write_size = BLOCK_SIZE_BYTES * 18;
+     
     ASSERT_EQ(write_size, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, 
         write_size, 0));
+
     ASSERT_EQ(write_size, vmufs_write_file(&vmu_fs, "FILE", write_file_contents, 
         write_size, 0));
     ASSERT_EQ(4, get_filecount(&vmu_fs));
