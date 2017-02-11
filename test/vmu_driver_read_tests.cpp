@@ -106,15 +106,7 @@ INSTANTIATE_TEST_CASE_P(VmuValidReadTest, VmuValidReadFileTest,
         // Check reading multiple blocks of data from an offset > 1 block into
         // the file works correctly
         new ValidVmuReadEntry("../vmu_a.bin", "SONICADV_INT", 1004, 
-            1024, 1024, 181, 10),
-        // Check attempting to read more than the total 
-        // number of bytes from the file works correctly
-        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", 0, 
-            BLOCK_SIZE_BYTES * 19, BLOCK_SIZE_BYTES * 18, 199, 18),
-        // Check reading at an offset past the end of the filedata
-        // works correctly
-        new ValidVmuReadEntry("../vmu_a.bin", "SONIC2___S01", BLOCK_SIZE_BYTES * 18, 
-            27, 0, 199, 18)
+            1024, 1024, 181, 10)
         ));
 
 
