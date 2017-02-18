@@ -1,7 +1,7 @@
 # FUSE VMU
 
 A FUSE ([Filesystem in userspace](https://en.wikipedia.org/wiki/Filesystem_in_Userspace)) 
-implementation of the Sega Dreamcast's VMU ([Visual Memory Unit](https://en.wikipedia.org/wiki/VMU)). 
+implementation of the Sega Dreamcast's VMU ([Visual Memory Unit](https://en.wikipedia.org/wiki/VMU)) for Linux and OSX. 
 
 # Design Decisions
 The VMU filesystem is similar to the FAT filesystem except that

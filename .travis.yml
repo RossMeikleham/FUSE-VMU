@@ -1,24 +1,29 @@
+- os:
+    linux
+    clang
+
+
 matrix:
     include:
         - os: linux
-        - language: cpp
-        - compiler: clang
+          language: cpp
+          compiler: clang
 
         - os: linux
-        - language: cpp
-        - compiler: gcc
+          language: cpp
+          compiler: gcc
 
         - os: osx
-        - language: cpp
-        - compiler: clang
+          language: cpp
+          compiler: clang
 
         - os: osx
-        - language: cpp
-        - compiler: gcc
+          language: cpp
+          compiler: gcc
 
 before_install:
-    - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get -qq update
-    - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get-install -y libtest-dev valgrind
+    - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get -qq update; fi
+    - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get-install -y libtest-dev valgrind; fi
     - sudo wget https://github.com/google/googletest/archive/release-1.7.0.tar.gz
     - sudo tar xf release-1.7.0.tar.gz
     - cd googletest-release-1.7.0
@@ -31,8 +36,8 @@ before_install:
 
 install:
     # Install LibFUSE
-    - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew install osxfuse
-    - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get-libfuse
+    - if [ "$TRAVIS_OS_NAME" == "osx" ]; then brew install osxfuse; fi
+    - if [ "$TRAVIS_OS_NAME" == "linux" ]; then sudo apt-get-libfuse; fi
 
     # Run unit tests
     - cd test
