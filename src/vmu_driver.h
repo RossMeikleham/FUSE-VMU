@@ -22,6 +22,7 @@ extern "C" {
 	(DIRECTORY_ENTRY_BLOCK_SIZE * DIRECTORY_ENTRIES_PER_BLOCK)
 
 enum filetype {
+	UNKNOWN,
 	GAME,
 	DATA
 };
@@ -107,6 +108,10 @@ int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size);
 
 // Remove a file from the filesystem
 int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *path);
+
+// Save the changes made to the VMU Filesystem to disk
+// returns 0 if successful, -1 otherwise
+int vmufs_write_changes_to_disk(struct vmu_fs *vmu_fs, const char *file_path);
 
 #ifdef __cplusplus
 }

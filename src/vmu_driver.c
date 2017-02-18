@@ -251,6 +251,7 @@ int vmufs_read_fs(uint8_t *img, const unsigned int length,
 			vmu_fs->vmu_file[i].filetype = GAME;
 			break;
 		default:
+			vmu_fs->vmu_file[i].filetype = UNKNOWN;
 			vmu_fs->vmu_file[i].is_free = true;
 			continue;
 		}
@@ -850,4 +851,94 @@ int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size)
 	vmu_file->size_in_blocks = blocks_required;
 
 	return (blocks_required * BLOCK_SIZE_BYTES);
+}
+
+
+int vmufs_write_changes_to_disk(struct vmu_fs *vmu_fs, const char *file_path)
+{
+	FILE *vmu_file = fopen(file_path, "wb");
+	
+	if (vmu_file == NULL) {
+		perror("Error");
+		fprintf(stderr, "Unable to open file \"%s\"\n", file_path);
+		return -1;
+	}
+
+	// Write "User Blocks' from 0 - 240
+	fwrite(vmu_fs->img, sizeof(uint8_t), 241 * BLOCK_SIZE_BYTES, vmu_file);	
+
+	// Write Directory Entries, blocks (240 - 253)
+	for (int i = TOTAL_DIRECTORY_ENTRIES - 1; i >= 0; i--) {
+		
+		uint8_t file_type;
+		
+		switch (vmu_fs->vmu_file[i].filetype) {
+		case DATA:
+			file_type = 0x33;
+			break;
+		case GAME:
+			file_type = 0xCC;
+			break;
+		default:
+			file_type = 0x00;
+		}
+
+		fwrite(&file_type, sizeof(uint8_t), 1, vmu_file);
+
+		uint8_t copy_protection = vmu_fs->vmu_file[i].copy_protected ?
+			0xFF : 0x00;
+		
+		fwrite(&copy_protection, sizeof(uint8_t), 1, vmu_file);
+
+		uint8_t starting_block[2];
+
+		write_16bit_le(starting_block, vmu_fs->vmu_file[i].starting_block);
+		fwrite(starting_block, sizeof(uint8_t), 2, vmu_file);
+
+		fwrite(vmu_fs->vmu_file[i].filename, sizeof(uint8_t),
+			MAX_FILENAME_SIZE, vmu_file);
+	
+		const struct timestamp ts = vmu_fs->vmu_file[i].timestamp;
+
+		fwrite(&ts.century, sizeof(uint8_t), 1, vmu_file);
+		fwrite(&ts.year, sizeof(uint8_t), 1, vmu_file);
+		fwrite(&ts.month, sizeof(uint8_t), 1, vmu_file);
+		fwrite(&ts.day, sizeof(uint8_t), 1, vmu_file);
+		fwrite(&ts.hour, sizeof(uint8_t), 1, vmu_file);
+		fwrite(&ts.minute, sizeof(uint8_t), 1, vmu_file);
+		fwrite(&ts.second, sizeof(uint8_t), 1, vmu_file);
+		fwrite(&ts.day_of_week, sizeof(uint8_t), 1, vmu_file);
+
+		uint8_t size_in_blocks[2];
+		
+		write_16bit_le(size_in_blocks,
+			vmu_fs->vmu_file[i].size_in_blocks);
+		fwrite(size_in_blocks, sizeof(uint8_t), 2, vmu_file);
+
+		uint8_t offset_in_blocks[2];
+
+		write_16bit_le(offset_in_blocks,
+			vmu_fs->vmu_file[i].size_in_blocks);
+		fwrite(offset_in_blocks, sizeof(uint8_t), 2, vmu_file);
+		
+		// Write Unused bytes
+		uint32_t zero = 0;
+		fwrite(&zero, sizeof(uint8_t), 4, vmu_file);
+	}
+	
+	// Write FAT Block (254)
+	const uint8_t *fat_block_addr = 
+		vmu_fs->img +
+		(BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location);
+
+	fwrite(fat_block_addr, sizeof(uint8_t), BLOCK_SIZE_BYTES, vmu_file);
+
+	// Write Root Block (255) (shouldn't have changed)
+	const uint8_t *root_block_addr = 
+		vmu_fs->img + (BLOCK_SIZE_BYTES * ROOT_BLOCK_NO);
+
+	fwrite(root_block_addr, sizeof(uint8_t), BLOCK_SIZE_BYTES, vmu_file);
+	
+	fclose(vmu_file);
+	return 0;
 }

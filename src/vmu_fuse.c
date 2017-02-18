@@ -206,7 +206,8 @@ int main(int argc, char *argv[])
 	FILE *vmu_file = fopen(vmu_fs_filepath, "rb");
 
 	if (vmu_file == NULL) {
-		fprintf(stderr, "Unable to open file %s\n", vmu_fs_filepath);
+		perror("Error");
+		fprintf(stderr, "Unable to open file \"%s\"\n", vmu_fs_filepath);
 		return -1;
 	}
 
@@ -217,7 +218,8 @@ int main(int argc, char *argv[])
 	fclose(vmu_file);
 
 	if (ferror(vmu_file) != 0) {
-		fprintf(stderr, "Error reading file %s\n", vmu_fs_filepath);
+		perror("Error");
+		fprintf(stderr, "Error reading file \"%s\"\n", vmu_fs_filepath);
 		return -1;
 	}
 
@@ -238,5 +240,9 @@ int main(int argc, char *argv[])
 
 	argc--;
 
-	return fuse_main(argc, argv, &fuse_operations, NULL);
+	int result = fuse_main(argc, argv, &fuse_operations, NULL);
+	if (result == 0)
+		return vmufs_write_changes_to_disk(&vmu_fs, vmu_fs_filepath); 
+	else
+		return result;
 }
