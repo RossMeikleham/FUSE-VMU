@@ -751,7 +751,8 @@ int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *file_name)
 	while (cur_block != 0xFFFA) {
 		cur_block = vmufs_next_block(vmu_fs, cur_block);
 
-		if (cur_block >= vmu_fs->root_block.user_block_count)
+		if (cur_block >= vmu_fs->root_block.user_block_count &&
+			cur_block !=  0xFFFA)
 			return -EINVAL;
 
 		int next = fat_block_addr + (cur_block * 2);
