@@ -37,7 +37,7 @@ The "fuse-vmu" binary should be in the `Fuse-VMU/build/bin` folder
 
 
 # Running
-`./fuse-vmu [fuse_args] <vmu_file_path> <mount_path>`
+`./fuse-vmu <vmu_file_path> [fuse_args] <mount_path>`
 
 # Building + Mounting the example VMU filesystem
 ```
@@ -48,7 +48,7 @@ cd build
 cmake ..
 make
 mkdir MOUNT_POINT
-./bin/fuse_vmu -f ../example/example_vmu.bin MOUNT_POINT
+./bin/fuse_vmu ../example/example_vmu.bin -f MOUNT_POINT
 ```
 
 
