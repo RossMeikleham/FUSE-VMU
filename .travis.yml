@@ -25,7 +25,6 @@ before_install:
     - sudo make
     - sudo cp -a include/gtest /usr/include
     - sudo cp -a libgtest_main.so libgtest.so /usr/lib/
-    - which valgrind
     - cd "${TRAVIS_BUILD_DIR}"
 
 install:
