@@ -53,13 +53,15 @@ mkdir MOUNT_POINT
 
 
 # Unmounting
--- umount <mount_path>
+`umount <mount_path>`
 
 # Building + Running Unit Tests
--- git clone http://github.com/RossMeikleham/Fuse-VMU
--- cd FUSE-VMU/test
--- mkdir build
--- cd build
--- cmake ..
--- make
--- bin/fuse_vmu_tests
+```
+git clone http://github.com/RossMeikleham/Fuse-VMU
+cd FUSE-VMU/test
+mkdir build
+cd build
+cmake ..
+make
+bin/fuse_vmu_tests
+```
