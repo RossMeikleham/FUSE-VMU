@@ -21,6 +21,9 @@ extern "C" {
 #define TOTAL_DIRECTORY_ENTRIES\
 	(DIRECTORY_ENTRY_BLOCK_SIZE * DIRECTORY_ENTRIES_PER_BLOCK)
 
+/* VMU Files can either be DATA (typically a save file)
+ * or a GAME file (Typically minigames which can be played on the vmu)
+ */
 enum filetype {
 	UNKNOWN,
 	GAME,
@@ -75,38 +78,68 @@ struct vmu_fs {
 // Convert 2 bytes into a 16 bit little endian integer
 uint16_t to_16bit_le(const uint8_t *img);
 
+// Locates the next free block in the filesystem below a given
+// block number. Returns the number of the first free block found
+// if successful. Returns -1 if there are no free blocks.
 int32_t vmufs_next_block(const struct vmu_fs *vmu_fs, uint16_t block_no);
 
-// Obtains the creation time of a file
+// Obtains the creation time of a file in a time_t format
 time_t get_creation_time(const struct vmu_file *vmu_file);
 
 // Obtains the directory entry offset for the given file path
-// in the filesystem. Returns -1 if it cannot be found
+// in the filesystem. Returns -1 if it cannot be found.
 int vmufs_get_dir_entry(const struct vmu_fs *vmu_fs, const char *path);
 
-// Read basic filesystem structures from vmu image
+// Read basic filesystem structures from vmu image, returns 0
+// if successful, -EUCLEAN if the image is not of the correct
+// size (128KB).
 int vmufs_read_fs(uint8_t *img, const unsigned int length,
 	struct vmu_fs *vmu_fs);
 
 // Attempts to rename a file in the vmu filesystem
-// returns 0 if successful, -EIO otherwise
+// returns 0 if successful, -ENAMETOOLONG if the
+// rename is too long, -EEXIST if the rename already
+// exists in the filesystem, -ENOENT if the original
+// file doesn't exist.
 int vmufs_rename_file(struct vmu_fs *vmu_fs,
 	const char *from, const char *to);
 
-// Read a file from the vmu filesystem
-// returns the number of bytes successfully read
+// Reads a file from the vmu filesystem
+// If successful returns the number of bytes read and
+// those bytes are stored in the given buffer. Returns -EEXIST
+// if the given file name doesn't exist, -EINVAL if attempting
+// to read past the end of the file or if there is a problem
+// traversing the file blocks which gives an invalid block number.
 int vmufs_read_file(const struct vmu_fs *vmu_fs, const char *file_name,
 	uint8_t *buf, size_t size, uint64_t offset);
 
-
+// Creates a file in the filesystem given a path.
+// returns 0 if successful, -ENAMETOOLONG if the file name
+// is too long, -EEXIST if the file already exists, -ENOSPC
+// if there is not enough space on the filesystem to create the file.
 int vmu_fs_create_file(struct vmu_fs *vmu_fs, const char *path);
 
+// Writes to the specified file, if successful returns the number of
+// bytes written to the file. Attempts to create the file if
+// it doesn't already exist. Returns -ENAMETOOLONG if the given path
+// is too long, -ENOSPC if there is not enough space to write the
+// given data to the file, -EEXIST if attempting to write to an offset
+// in a file which doesn't exist, -EINVAL if there is a problem
+// obtaining a valid block.
 int vmufs_write_file(struct vmu_fs *vmu_fs, const char *path, uint8_t *buf,
 	size_t size, uint64_t offset);
 
+// Resizes the given file to the specified size. If successful returns
+// the new size of the given file. Returns -ENOENT if the given file
+// cannot be found, -ENOSPC if there isn't enough space in the filesystem
+// to resize the file to the specified size,-EINVAL if there is a problem
+// obtaining a valid block.
 int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size);
 
-// Remove a file from the filesystem
+// Remove a file from the filesystem. If successful returns 0.
+// Returns -ENOENT if the given file cannot be found, -ENAMETOOLONG
+// if the given file name is too long, -EINVAL if there is a problem
+// obtaining a valid block.
 int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *path);
 
 // Save the changes made to the VMU Filesystem to disk

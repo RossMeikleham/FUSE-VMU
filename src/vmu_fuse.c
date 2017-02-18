@@ -207,7 +207,8 @@ int main(int argc, char *argv[])
 
 	if (vmu_file == NULL) {
 		perror("Error");
-		fprintf(stderr, "Unable to open file \"%s\"\n", vmu_fs_filepath);
+		fprintf(stderr, "Unable to open file \"%s\"\n",
+			vmu_fs_filepath);
 		return -1;
 	}
 
@@ -241,8 +242,9 @@ int main(int argc, char *argv[])
 	argc--;
 
 	int result = fuse_main(argc, argv, &fuse_operations, NULL);
+
 	if (result == 0)
-		return vmufs_write_changes_to_disk(&vmu_fs, vmu_fs_filepath); 
+		return vmufs_write_changes_to_disk(&vmu_fs, vmu_fs_filepath);
 	else
 		return result;
 }

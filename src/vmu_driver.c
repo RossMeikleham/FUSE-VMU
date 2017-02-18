@@ -18,6 +18,9 @@ uint16_t to_16bit_le(const uint8_t *img)
 	return img[0] | (img[1] << 8);
 }
 
+/* Write a 16 bit value in little endian format
+ * into the given memory address
+ */
 static void write_16bit_le(uint8_t *img, uint16_t value)
 {
 	img[0] = value & 0xFF;
@@ -40,6 +43,7 @@ static struct timestamp create_timestamp(const uint8_t *img)
 	return ts;
 }
 
+// Converts a Binary Coded Decimal value into an integer
 static uint8_t bcd_to_byte(uint8_t bcd)
 {
 	return (((bcd & 0xF0) >> 4) * 10) + (bcd & 0x0F);
@@ -61,7 +65,7 @@ static struct timestamp to_timestamp(time_t time)
 {
 	struct tm *tm = localtime(&time);
 	struct timestamp timestamp;
-	
+
 	timestamp.century = byte_to_bcd((tm->tm_year + 1900) / 100);
 	timestamp.year = byte_to_bcd(tm->tm_year % 100);
 	timestamp.month = byte_to_bcd(tm->tm_mon + 1);
@@ -74,7 +78,8 @@ static struct timestamp to_timestamp(time_t time)
 	return timestamp;
 }
 
-// Yay dates
+// Translate the creation date of the given vmu file into
+// a time_t format
 time_t get_creation_time(const struct vmu_file *vmu_file)
 {
 	const struct timestamp *ts = &(vmu_file->timestamp);
@@ -746,6 +751,9 @@ int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *file_name)
 	while (cur_block != 0xFFFA) {
 		cur_block = vmufs_next_block(vmu_fs, cur_block);
 
+		if (cur_block >= vmu_fs->root_block.user_block_count)
+			return -EINVAL;
+
 		int next = fat_block_addr + (cur_block * 2);
 
 		write_16bit_le(vmu_fs->img + fat_addr, 0xFFFC);
@@ -758,7 +766,7 @@ int vmufs_remove_file(struct vmu_fs *vmu_fs, const char *file_name)
 
 int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size)
 {
-   // VMU filesizes are always in blocks
+	// VMU filesizes are always in blocks
 	uint16_t blocks_required = (size / BLOCK_SIZE_BYTES) +
 		!!(size % BLOCK_SIZE_BYTES);
 
@@ -784,7 +792,7 @@ int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size)
 
 	for (int i = 0; i < block_to_go_to - 1; i++) {
 		if (cur_block >= vmu_fs->root_block.user_block_count)
-			return -EIO;
+			return -EINVAL;
 
 		cur_block = vmufs_next_block(vmu_fs, cur_block);
 	}
@@ -794,7 +802,7 @@ int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size)
 
 		// Mark end of file
 		if (cur_block >= vmu_fs->root_block.user_block_count)
-			return -EIO;
+			return -EINVAL;
 
 		int next_block = vmufs_next_block(vmu_fs, cur_block);
 
@@ -807,7 +815,7 @@ int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size)
 
 		while (cur_block != 0xFFFA) {
 			if (cur_block >= vmu_fs->root_block.user_block_count)
-				return -EIO;
+				return -EINVAL;
 
 			int next_block = vmufs_next_block(vmu_fs, cur_block);
 
@@ -857,7 +865,7 @@ int vmufs_truncate_file(struct vmu_fs *vmu_fs, const char *path, off_t size)
 int vmufs_write_changes_to_disk(struct vmu_fs *vmu_fs, const char *file_path)
 {
 	FILE *vmu_file = fopen(file_path, "wb");
-	
+
 	if (vmu_file == NULL) {
 		perror("Error");
 		fprintf(stderr, "Unable to open file \"%s\"\n", file_path);
@@ -865,13 +873,13 @@ int vmufs_write_changes_to_disk(struct vmu_fs *vmu_fs, const char *file_path)
 	}
 
 	// Write "User Blocks' from 0 - 240
-	fwrite(vmu_fs->img, sizeof(uint8_t), 241 * BLOCK_SIZE_BYTES, vmu_file);	
+	fwrite(vmu_fs->img, sizeof(uint8_t), 241 * BLOCK_SIZE_BYTES, vmu_file);
 
 	// Write Directory Entries, blocks (240 - 253)
 	for (int i = TOTAL_DIRECTORY_ENTRIES - 1; i >= 0; i--) {
-		
+
 		uint8_t file_type;
-		
+
 		switch (vmu_fs->vmu_file[i].filetype) {
 		case DATA:
 			file_type = 0x33;
@@ -887,17 +895,19 @@ int vmufs_write_changes_to_disk(struct vmu_fs *vmu_fs, const char *file_path)
 
 		uint8_t copy_protection = vmu_fs->vmu_file[i].copy_protected ?
 			0xFF : 0x00;
-		
+
 		fwrite(&copy_protection, sizeof(uint8_t), 1, vmu_file);
 
 		uint8_t starting_block[2];
 
-		write_16bit_le(starting_block, vmu_fs->vmu_file[i].starting_block);
+		write_16bit_le(starting_block,
+			vmu_fs->vmu_file[i].starting_block);
+
 		fwrite(starting_block, sizeof(uint8_t), 2, vmu_file);
 
 		fwrite(vmu_fs->vmu_file[i].filename, sizeof(uint8_t),
 			MAX_FILENAME_SIZE, vmu_file);
-	
+
 		const struct timestamp ts = vmu_fs->vmu_file[i].timestamp;
 
 		fwrite(&ts.century, sizeof(uint8_t), 1, vmu_file);
@@ -910,7 +920,7 @@ int vmufs_write_changes_to_disk(struct vmu_fs *vmu_fs, const char *file_path)
 		fwrite(&ts.day_of_week, sizeof(uint8_t), 1, vmu_file);
 
 		uint8_t size_in_blocks[2];
-		
+
 		write_16bit_le(size_in_blocks,
 			vmu_fs->vmu_file[i].size_in_blocks);
 		fwrite(size_in_blocks, sizeof(uint8_t), 2, vmu_file);
@@ -920,25 +930,26 @@ int vmufs_write_changes_to_disk(struct vmu_fs *vmu_fs, const char *file_path)
 		write_16bit_le(offset_in_blocks,
 			vmu_fs->vmu_file[i].size_in_blocks);
 		fwrite(offset_in_blocks, sizeof(uint8_t), 2, vmu_file);
-		
+
 		// Write Unused bytes
 		uint32_t zero = 0;
+
 		fwrite(&zero, sizeof(uint8_t), 4, vmu_file);
 	}
-	
-	// Write FAT Block (254)
-	const uint8_t *fat_block_addr = 
+
+	// Write FAT Block
+	const uint8_t *fat_block_addr =
 		vmu_fs->img +
 		(BLOCK_SIZE_BYTES * vmu_fs->root_block.fat_location);
 
 	fwrite(fat_block_addr, sizeof(uint8_t), BLOCK_SIZE_BYTES, vmu_file);
 
 	// Write Root Block (255) (shouldn't have changed)
-	const uint8_t *root_block_addr = 
+	const uint8_t *root_block_addr =
 		vmu_fs->img + (BLOCK_SIZE_BYTES * ROOT_BLOCK_NO);
 
 	fwrite(root_block_addr, sizeof(uint8_t), BLOCK_SIZE_BYTES, vmu_file);
-	
+
 	fclose(vmu_file);
 	return 0;
 }
