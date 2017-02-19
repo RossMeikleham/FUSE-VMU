@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
-project(fuse_vmu_tests VERSION 0.0.1 LANGUAGES C CXX)
+project(fuse_vmu_tests VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_C_FLAGS "${CMAKE_CXX_FLAGS} -D_FILE_OFFSET_BITS=64")
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall --pedantic -g")
