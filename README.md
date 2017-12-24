@@ -16,12 +16,21 @@ So the reported filesize of a given file is a multiple of a blocksize on
 disk (multiples of 512 bytes). I may decide to change this at some point.
 
 # Required
+- Linux : FUSE Kernel Module enabled
+- OSX : [OSXFuse]('http://osxfuse.github.com/')
+
+# Docker Builds
+- `docker build -t fuse-vmu .` 
+- Produces a docker image in which the fuse_vmu binary is in the `/usr/bin` folder
+
+# Native Builds
+
+## Required
+- Linux : libfuse userspace library
 - gcc or clang version which supports C99
 - cmake
 - (If running unit tests a version of gcc or clang which supports C++11)
 - (If running unit tests the [google test framework](https://github.com/google/googletest)) 
-- Linux : libfuse
-- OSX : osxfuse (installed via homebrew)
 
 ## Building
 ```
