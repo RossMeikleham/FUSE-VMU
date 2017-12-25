@@ -1,4 +1,5 @@
 # FUSE VMU
+[![Build Status](https://travis-ci.org/RossMeikleham/FUSE-VMU.svg?branch=master)](https://travis-ci.org/RossMeikleham/FUSE-VMU)
 
 A FUSE ([Filesystem in userspace](https://en.wikipedia.org/wiki/Filesystem_in_Userspace)) 
 implementation of the Sega Dreamcast's VMU ([Visual Memory Unit](https://en.wikipedia.org/wiki/VMU)) for Linux and OSX. 
