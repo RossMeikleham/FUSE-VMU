@@ -8,7 +8,7 @@
 
 #include "vmu_driver.h"
 
-// The Filesystem, only 128KB so just keep the entire thing in memory
+// The Filesystem is only 128KB so just keep the entire thing in memory
 static struct vmu_fs vmu_fs;
 
 
@@ -151,7 +151,7 @@ static int vmu_truncate(const char *path, off_t size)
 
 static int vmu_utimens(const char *path, const struct timespec ts[2])
 {
-	// VMU FS doesn't sore Last Accessed or Last Modified time
+	// VMU FS doesn't store Last Accessed or Last Modified time
 	return 0;
 }
 
@@ -233,7 +233,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Need to swap mount point argv into the one before it was placed
-	 * before passing control to fuse otherwise fuse will think the
+	 * before passing control to fuse, otherwise fuse will think the
 	 * vmu file is the mount point
 	 */
 	for (int i = 1; i < argc - 1; i++)
