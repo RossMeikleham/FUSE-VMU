@@ -68,7 +68,7 @@ mkdir MOUNT_POINT
 # Building + Running Unit Tests
 ```
 git clone http://github.com/RossMeikleham/Fuse-VMU
-cd FUSE-Vmu/test
+cd Fuse-VMU/test
 mkdir build
 cd build
 cmake ..
